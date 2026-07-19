@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sampling Distribution of OLS - Interactive</title>
+<style>
+  :root{
+    --teal:#028090;
+    --charcoal:#2D3142;
+    --offwhite:#F7F5F2;
+    --terracotta:#C05942;
+    --grayline: rgba(45,49,66,0.18);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--offwhite);
+    font-family: Calibri, "Trebuchet MS", Arial, sans-serif;
+    color:var(--charcoal);
+  }
+  .header{
+    background:var(--charcoal);
+    color:var(--offwhite);
+    padding:22px 28px 18px 28px;
+    border-left:8px solid var(--teal);
+  }
+  .header h1{
+    margin:0;
+    font-family:"Trebuchet MS", Arial, sans-serif;
+    font-weight:700;
+    font-size:26px;
+    letter-spacing:0.2px;
+  }
+  .header p{
+    margin:6px 0 0 0;
+    font-size:14px;
+    color:#C9D6D8;
+  }
+  .stage{
+    display:flex;
+    gap:22px;
+    padding:22px 28px 8px 28px;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  .panel{
+    background:#fff;
+    border:1px solid var(--grayline);
+    border-radius:4px;
+    padding:14px 16px 10px 16px;
+  }
+  .panel h2{
+    margin:0 0 8px 0;
+    font-family:"Trebuchet MS", Arial, sans-serif;
+    font-size:15px;
+    font-weight:700;
+    color:var(--charcoal);
+    text-align:center;
+  }
+  canvas{display:block;}
+
+  .controls{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:22px;
+    flex-wrap:wrap;
+    padding:14px 28px 8px 28px;
+  }
+  .btn{
+    background:var(--teal);
+    color:#fff;
+    border:none;
+    border-radius:4px;
+    padding:9px 18px;
+    font-size:14px;
+    font-family:"Trebuchet MS", Arial, sans-serif;
+    font-weight:700;
+    cursor:pointer;
+    letter-spacing:0.2px;
+  }
+  .btn:hover{ filter:brightness(1.08); }
+  .btn.secondary{
+    background:transparent;
+    color:var(--charcoal);
+    border:1.5px solid var(--charcoal);
+  }
+  .field{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:13px;
+  }
+  select{
+    font-family:Calibri, Arial, sans-serif;
+    font-size:13px;
+    padding:5px 8px;
+    border-radius:4px;
+    border:1px solid var(--grayline);
+    background:#fff;
+    color:var(--charcoal);
+  }
+  .slope-row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    padding:4px 28px 18px 28px;
+    flex-wrap:wrap;
+  }
+  input[type="range"]{
+    width:260px;
+    accent-color:var(--teal);
+  }
+  .slope-readout{
+    font-family:"Trebuchet MS", Arial, sans-serif;
+    font-weight:700;
+    font-size:15px;
+    color:var(--terracotta);
+    min-width:52px;
+    text-align:left;
+  }
+  .stat-line{
+    text-align:center;
+    padding:0 28px 22px 28px;
+    font-size:14px;
+    color:var(--charcoal);
+  }
+  .stat-line b{ color:var(--teal); }
+  .stat-line .truth{ color:var(--terracotta); font-weight:700; }
+  .legend{
+    display:flex;
+    gap:18px;
+    justify-content:center;
+    font-size:12.5px;
+    padding-bottom:6px;
+    color:var(--charcoal);
+  }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .swatch{ width:16px; height:3px; display:inline-block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Sampling Distribution of OLS</h1>
+  <p>Set the true slope, then watch what happens when you take sample after sample from the same population.</p>
+</div>
+
+<div class="legend">
+  <span><span class="swatch" style="background:var(--grayline)"></span> previous fits</span>
+  <span><span class="swatch" style="background:var(--charcoal)"></span> current sample's fit</span>
+  <span><span class="swatch" style="background:var(--terracotta)"></span> true population line</span>
+</div>
+
+<div class="slope-row">
+  <label for="slopeSlider"><b>True slope (&beta;&#8321;):</b></label>
+  <input type="range" id="slopeSlider" min="-3" max="3" step="0.1" value="1.5">
+  <span class="slope-readout" id="slopeReadout">1.5</span>
+</div>
+
+<div class="slope-row">
+  <label for="noiseSlider"><b>Noise (SD of the errors):</b></label>
+  <input type="range" id="noiseSlider" min="1" max="30" step="1" value="15">
+  <span class="slope-readout" id="noiseReadout">15</span>
+</div>
+
+<div class="stage">
+  <div class="panel">
+    <h2>OLS fit on each new sample</h2>
+    <canvas id="scatter" width="520" height="520"></canvas>
+  </div>
+  <div class="panel">
+    <h2>Distribution of &beta;&#8321; across samples</h2>
+    <canvas id="hist" width="520" height="520"></canvas>
+  </div>
+</div>
+
+<div class="stat-line" id="statLine">
+  Sample 0 &nbsp;|&nbsp; this sample's &beta;&#8321; = &mdash; &nbsp;|&nbsp; mean of all &beta;&#8321; so far = &mdash; &nbsp;|&nbsp; true &beta;&#8321; = <span class="truth">1.5</span>
+</div>
+
+<div class="controls">
+  <button class="btn" id="playBtn">Pause</button>
+  <button class="btn secondary" id="resetBtn">Reset</button>
+  <div class="field">
+    <label for="nSelect">Sample size (n):</label>
+    <select id="nSelect">
+      <option value="10">10</option>
+      <option value="30" selected>30</option>
+      <option value="100">100</option>
+      <option value="300">300</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="speedSelect">Speed:</label>
+    <select id="speedSelect">
+      <option value="1400">Slow</option>
+      <option value="700" selected>Medium</option>
+      <option value="250">Fast</option>
+      <option value="60">Very fast</option>
+    </select>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---------- population / DGP ----------
+  const TRUE_INTERCEPT = 50;
+  const X_MIN = 0, X_MAX = 100;
+  let TRUE_SLOPE = 1.5;
+  let NOISE_SD = 15;
+
+  // Y range and histogram range are recomputed whenever the true slope changes
+  let Y_MIN, Y_MAX, HIST_MIN, HIST_MAX;
+  const NBINS = 40;
+  let binWidth;
+
+  function recomputeRanges(){
+    const yAtMin = TRUE_INTERCEPT + TRUE_SLOPE*X_MIN;
+    const yAtMax = TRUE_INTERCEPT + TRUE_SLOPE*X_MAX;
+    const lo = Math.min(yAtMin, yAtMax);
+    const hi = Math.max(yAtMin, yAtMax);
+    const buffer = 4*NOISE_SD;
+    Y_MIN = lo - buffer;
+    Y_MAX = hi + buffer;
+
+    // histogram window: wide enough to comfortably hold n=10 variability at the
+    // current noise level, recentered on whatever true slope the student picked
+    const histHalfWidth = Math.max(0.3, 1.5 * (NOISE_SD / 15));
+    HIST_MIN = TRUE_SLOPE - histHalfWidth;
+    HIST_MAX = TRUE_SLOPE + histHalfWidth;
+    binWidth = (HIST_MAX - HIST_MIN)/NBINS;
+  }
+  recomputeRanges();
+
+  function randNormal(mean, sd){
+    let u = 1 - Math.random();
+    let v = Math.random();
+    let z = Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+    return mean + sd*z;
+  }
+  function randX(){ return X_MIN + Math.random()*(X_MAX - X_MIN); }
+
+  // fixed-size background "population" cloud, regenerated whenever the slope changes
+  const POP_N = 2200;
+  let population = [];
+  function regeneratePopulation(){
+    population = [];
+    for(let i=0;i<POP_N;i++){
+      const x = randX();
+      const y = TRUE_INTERCEPT + TRUE_SLOPE*x + randNormal(0, NOISE_SD);
+      population.push([x,y]);
+    }
+  }
+  regeneratePopulation();
+
+  function ols(xs, ys){
+    const n = xs.length;
+    let mx=0, my=0;
+    for(let i=0;i<n;i++){ mx+=xs[i]; my+=ys[i]; }
+    mx/=n; my/=n;
+    let num=0, den=0;
+    for(let i=0;i<n;i++){
+      num += (xs[i]-mx)*(ys[i]-my);
+      den += (xs[i]-mx)*(xs[i]-mx);
+    }
+    const slope = num/den;
+    const intercept = my - slope*mx;
+    return {slope, intercept};
+  }
+
+  // ---------- canvas setup ----------
+  const scatterCv = document.getElementById('scatter');
+  const histCv = document.getElementById('hist');
+  const sctx = scatterCv.getContext('2d');
+  const hctx = histCv.getContext('2d');
+
+  const PAD = 40;
+  const W = scatterCv.width, H = scatterCv.height;
+
+  function toPx(x){ return PAD + (x - X_MIN)/(X_MAX - X_MIN) * (W - 2*PAD); }
+  function toPy(y){ return H - PAD - (y - Y_MIN)/(Y_MAX - Y_MIN) * (H - 2*PAD); }
+
+  function drawScatterBase(){
+    sctx.clearRect(0,0,W,H);
+    // border
+    sctx.strokeStyle = 'rgba(45,49,66,0.35)';
+    sctx.lineWidth = 1;
+    sctx.strokeRect(PAD, PAD, W-2*PAD, H-2*PAD);
+    // population cloud
+    sctx.fillStyle = 'rgba(45,49,66,0.10)';
+    for(const [x,y] of population){
+      if(y<Y_MIN || y>Y_MAX) continue;
+      sctx.beginPath();
+      sctx.arc(toPx(x), toPy(y), 2, 0, Math.PI*2);
+      sctx.fill();
+    }
+    // true population line
+    sctx.strokeStyle = 'rgba(192,89,66,0.85)';
+    sctx.lineWidth = 2;
+    sctx.setLineDash([6,5]);
+    sctx.beginPath();
+    sctx.moveTo(toPx(X_MIN), toPy(TRUE_INTERCEPT + TRUE_SLOPE*X_MIN));
+    sctx.lineTo(toPx(X_MAX), toPy(TRUE_INTERCEPT + TRUE_SLOPE*X_MAX));
+    sctx.stroke();
+    sctx.setLineDash([]);
+
+    // generic axis labels
+    sctx.fillStyle = '#2D3142';
+    sctx.font = 'bold 14px "Trebuchet MS", Arial, sans-serif';
+    sctx.textAlign = 'center';
+    sctx.fillText('X', W/2, H - 8);
+    sctx.save();
+    sctx.translate(14, H/2);
+    sctx.rotate(-Math.PI/2);
+    sctx.fillText('Y', 0, 0);
+    sctx.restore();
+  }
+
+  let bins = new Array(NBINS).fill(0);
+
+  function drawHistogram(){
+    hctx.clearRect(0,0,W,H);
+    const maxCount = Math.max(4, ...bins);
+    const plotH = H - 2*PAD;
+    const plotW = W - 2*PAD;
+    hctx.strokeStyle = 'rgba(45,49,66,0.5)';
+    hctx.lineWidth = 1;
+    hctx.beginPath();
+    hctx.moveTo(PAD, H-PAD);
+    hctx.lineTo(W-PAD, H-PAD);
+    hctx.stroke();
+    hctx.fillStyle = '#2D3142';
+    hctx.font = '12px Calibri, Arial, sans-serif';
+    hctx.textAlign = 'center';
+    const tickStep = (HIST_MAX-HIST_MIN)/6;
+    for(let i=0;i<=6;i++){
+      const v = HIST_MIN + i*tickStep;
+      const px = PAD + (v-HIST_MIN)/(HIST_MAX-HIST_MIN)*plotW;
+      hctx.beginPath();
+      hctx.moveTo(px, H-PAD);
+      hctx.lineTo(px, H-PAD+5);
+      hctx.stroke();
+      hctx.fillText(v.toFixed(2), px, H-PAD+18);
+    }
+    for(let i=0;i<NBINS;i++){
+      const count = bins[i];
+      if(count<=0) continue;
+      const x0 = HIST_MIN + i*binWidth;
+      const px0 = PAD + (x0-HIST_MIN)/(HIST_MAX-HIST_MIN)*plotW;
+      const barW = (binWidth/(HIST_MAX-HIST_MIN))*plotW;
+      const barH = (count/maxCount) * (plotH - 10);
+      hctx.fillStyle = '#2D3142';
+      hctx.fillRect(px0+0.5, H-PAD-barH, Math.max(barW-1,1), barH);
+    }
+    const truePx = PAD + (TRUE_SLOPE-HIST_MIN)/(HIST_MAX-HIST_MIN)*plotW;
+    hctx.strokeStyle = 'rgba(192,89,66,0.9)';
+    hctx.lineWidth = 2;
+    hctx.setLineDash([6,5]);
+    hctx.beginPath();
+    hctx.moveTo(truePx, H-PAD);
+    hctx.lineTo(truePx, PAD);
+    hctx.stroke();
+    hctx.setLineDash([]);
+
+    hctx.fillStyle = '#2D3142';
+    hctx.font = 'bold 14px "Trebuchet MS", Arial, sans-serif';
+    hctx.fillText('\u03B2\u2081 estimate', W/2, H - 8);
+  }
+
+  // ---------- animation state ----------
+  let history = [];
+  let sampleCount = 0;
+  let slopeSum = 0;
+  let playing = true;
+  let n = 30;
+  let intervalMs = 700;
+  let timer = null;
+
+  const statLine = document.getElementById('statLine');
+  const playBtn = document.getElementById('playBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const nSelect = document.getElementById('nSelect');
+  const speedSelect = document.getElementById('speedSelect');
+  const slopeSlider = document.getElementById('slopeSlider');
+  const slopeReadout = document.getElementById('slopeReadout');
+  const noiseSlider = document.getElementById('noiseSlider');
+  const noiseReadout = document.getElementById('noiseReadout');
+
+  function drawFrame(currentSampleXY, fit){
+    drawScatterBase();
+    const capped = history.slice(Math.max(0, history.length-400));
+    sctx.lineWidth = 1;
+    sctx.strokeStyle = 'rgba(45,49,66,0.18)';
+    for(const h of capped){
+      sctx.beginPath();
+      sctx.moveTo(toPx(X_MIN), toPy(h.intercept + h.slope*X_MIN));
+      sctx.lineTo(toPx(X_MAX), toPy(h.intercept + h.slope*X_MAX));
+      sctx.stroke();
+    }
+    if(currentSampleXY){
+      sctx.fillStyle = '#C05942';
+      for(let i=0;i<currentSampleXY.xs.length;i++){
+        const x = currentSampleXY.xs[i], y = currentSampleXY.ys[i];
+        sctx.beginPath();
+        sctx.arc(toPx(x), toPy(y), 3.4, 0, Math.PI*2);
+        sctx.fill();
+      }
+      sctx.lineWidth = 3;
+      sctx.strokeStyle = '#2D3142';
+      sctx.beginPath();
+      sctx.moveTo(toPx(X_MIN), toPy(fit.intercept + fit.slope*X_MIN));
+      sctx.lineTo(toPx(X_MAX), toPy(fit.intercept + fit.slope*X_MAX));
+      sctx.stroke();
+    }
+  }
+
+  function step(){
+    const xs = [], ys = [];
+    for(let i=0;i<n;i++){
+      const x = randX();
+      const y = TRUE_INTERCEPT + TRUE_SLOPE*x + randNormal(0, NOISE_SD);
+      xs.push(x); ys.push(y);
+    }
+    const fit = ols(xs, ys);
+    drawFrame({xs,ys}, fit);
+
+    history.push(fit);
+    sampleCount++;
+    slopeSum += fit.slope;
+
+    const bidx = Math.floor((fit.slope - HIST_MIN)/binWidth);
+    if(bidx>=0 && bidx<NBINS) bins[bidx]++;
+    drawHistogram();
+
+    const meanSlope = slopeSum/sampleCount;
+    statLine.innerHTML = `Sample ${sampleCount} &nbsp;|&nbsp; this sample's &beta;&#8321; = <b>${fit.slope.toFixed(3)}</b> &nbsp;|&nbsp; mean of all &beta;&#8321; so far = <b>${meanSlope.toFixed(3)}</b> &nbsp;|&nbsp; true &beta;&#8321; = <span class="truth">${TRUE_SLOPE.toFixed(1)}</span>`;
+  }
+
+  function scheduleNext(){
+    if(timer) clearTimeout(timer);
+    if(!playing) return;
+    timer = setTimeout(function(){
+      step();
+      scheduleNext();
+    }, intervalMs);
+  }
+
+  function resetAll(){
+    history = [];
+    sampleCount = 0;
+    slopeSum = 0;
+    bins = new Array(NBINS).fill(0);
+    drawScatterBase();
+    drawHistogram();
+    statLine.innerHTML = `Sample 0 &nbsp;|&nbsp; this sample's &beta;&#8321; = &mdash; &nbsp;|&nbsp; mean of all &beta;&#8321; so far = &mdash; &nbsp;|&nbsp; true &beta;&#8321; = <span class="truth">${TRUE_SLOPE.toFixed(1)}</span>`;
+  }
+
+  playBtn.addEventListener('click', function(){
+    playing = !playing;
+    playBtn.textContent = playing ? 'Pause' : 'Play';
+    if(playing) scheduleNext();
+    else if(timer) clearTimeout(timer);
+  });
+
+  resetBtn.addEventListener('click', function(){
+    resetAll();
+  });
+
+  nSelect.addEventListener('change', function(){
+    n = parseInt(nSelect.value, 10);
+    resetAll();
+  });
+
+  speedSelect.addEventListener('change', function(){
+    intervalMs = parseInt(speedSelect.value, 10);
+    if(timer) clearTimeout(timer);
+    if(playing) scheduleNext();
+  });
+
+  slopeSlider.addEventListener('input', function(){
+    TRUE_SLOPE = parseFloat(slopeSlider.value);
+    slopeReadout.textContent = TRUE_SLOPE.toFixed(1);
+    recomputeRanges();
+    regeneratePopulation();
+    resetAll();
+  });
+
+  noiseSlider.addEventListener('input', function(){
+    NOISE_SD = parseFloat(noiseSlider.value);
+    noiseReadout.textContent = NOISE_SD.toFixed(0);
+    recomputeRanges();
+    regeneratePopulation();
+    resetAll();
+  });
+
+  // init
+  resetAll();
+  scheduleNext();
+})();
+</script>
+
+</body>
+</html>
